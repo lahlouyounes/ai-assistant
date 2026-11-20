@@ -1,0 +1,4 @@
+# VPS : remplacez par votre domaine. Caddy obtient le certificat HTTPS automatiquement.
+assistant.exemple.com {
+    reverse_proxy assistant:8000
+}

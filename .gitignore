@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+data/*.db
+.venv/
+node_modules/
+dist/
+npm-debug.log*
