@@ -20,6 +20,7 @@ class Settings:
     gemini_base_url: str = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
     model: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5-5")
     api_token: str = os.getenv("API_TOKEN", "")
+    database_url: str = os.getenv("DATABASE_URL", "")
     memory_db: str = os.getenv("MEMORY_DB", str(DATA_DIR / "memory.db"))
     notes_db: str = os.getenv("NOTES_DB", str(DATA_DIR / "notes.db"))
     http_allowed_hosts: list = field(default_factory=lambda: [

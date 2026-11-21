@@ -2,19 +2,20 @@ services:
   - type: web
     name: ai-assistant
     runtime: docker
-    plan: starter            # un disque persistant nécessite un plan payant
+    plan: free
+    region: frankfurt
     healthCheckPath: /health
-    disk:
-      name: data
-      mountPath: /srv/data
-      sizeGB: 1
     envVars:
       - key: LLM_PROVIDER
         value: gemini
       - key: GEMINI_API_KEY
-        sync: false          # à saisir dans le tableau de bord Render
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-assistant-db
+          property: connectionString
       - key: API_TOKEN
-        generateValue: true  # code d'accès généré automatiquement
+        generateValue: true
       - key: PUBLIC_MODE
         value: "true"
       - key: TRUST_PROXY
@@ -23,3 +24,11 @@ services:
         value: "15"
       - key: DAILY_MESSAGE_CAP
         value: "500"
+
+databases:
+  - name: ai-assistant-db
+    databaseName: ai_assistant
+    user: ai_assistant
+    plan: free
+    region: frankfurt
+    ipAllowList: []

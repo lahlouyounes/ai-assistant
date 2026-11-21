@@ -7,13 +7,13 @@ import operator as op
 import re
 import smtplib
 import socket
-import sqlite3
 from email.message import EmailMessage
 from urllib.parse import urlparse
 
 import httpx
 
 from .config import settings
+from .database import execute, open_connection
 
 # ---------- Calculator (évaluation AST sécurisée, pas d'eval) ----------
 _BIN = {ast.Add: op.add, ast.Sub: op.sub, ast.Mult: op.mul, ast.Div: op.truediv,
@@ -92,23 +92,32 @@ def web_search(query: str, max_results: int = 5) -> str:
 
 
 # ---------- Database (notes) ----------
-def _notes_con(readonly: bool = False) -> sqlite3.Connection:
-    if readonly:
-        return sqlite3.connect(f"file:{settings.notes_db}?mode=ro", uri=True)
-    con = sqlite3.connect(settings.notes_db)
-    con.execute("""CREATE TABLE IF NOT EXISTS notes(
-        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
-    con.commit()
+def _notes_con(readonly: bool = False):
+    con = open_connection(settings.notes_db, readonly=readonly)
+    if not readonly:
+        if settings.database_url:
+            con.execute("""CREATE TABLE IF NOT EXISTS notes(
+                id BIGSERIAL PRIMARY KEY, title TEXT NOT NULL, content TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        else:
+            con.execute("""CREATE TABLE IF NOT EXISTS notes(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP)""")
+        con.commit()
     return con
 
 
 def db_save_note(title: str, content: str) -> str:
     con = _notes_con()
     try:
-        cur = con.execute("INSERT INTO notes(title, content) VALUES (?,?)", (title, content))
+        if settings.database_url:
+            cur = con.execute("INSERT INTO notes(title, content) VALUES (%s,%s) RETURNING id", (title, content))
+            note_id = cur.fetchone()["id"]
+        else:
+            cur = con.execute("INSERT INTO notes(title, content) VALUES (?,?)", (title, content))
+            note_id = cur.lastrowid
         con.commit()
-        return f"Note enregistrée (id={cur.lastrowid})."
+        return f"Note enregistrée (id={note_id})."
     finally:
         con.close()
 
@@ -124,8 +133,9 @@ def db_query(sql: str) -> str:
         cur = con.execute(s)
         cols = [c[0] for c in cur.description]
         rows = cur.fetchmany(50)
-        return json.dumps([dict(zip(cols, r)) for r in rows], ensure_ascii=False) if rows else "Aucun résultat."
-    except sqlite3.Error as exc:
+        data = rows if rows and isinstance(rows[0], dict) else [dict(zip(cols, r)) for r in rows]
+        return json.dumps(data, ensure_ascii=False) if rows else "Aucun résultat."
+    except Exception as exc:
         return f"Erreur SQL : {exc}"
     finally:
         con.close()
@@ -134,7 +144,7 @@ def db_query(sql: str) -> str:
 def db_delete_note(note_id: int) -> str:
     con = _notes_con()
     try:
-        cur = con.execute("DELETE FROM notes WHERE id=?", (int(note_id),))
+        cur = execute(con, "DELETE FROM notes WHERE id=?", (int(note_id),))
         con.commit()
         return f"{cur.rowcount} note(s) supprimée(s)."
     finally:
